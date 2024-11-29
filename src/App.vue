@@ -1,6 +1,14 @@
 <script setup>
 import { RouterLink, RouterView } from 'vue-router'
+import { onMounted } from 'vue'
+import { useProductStore } from '@/stores/products'
 
+const store = useProductStore()
+
+onMounted(async () => {
+  console.log('App mounted - przywracanie produktów...')
+  await store.restoreSelectedProducts()
+})
 </script>
 
 <template>
