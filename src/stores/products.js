@@ -68,6 +68,8 @@ export const useProductStore = defineStore('products', {
         }
         
         this.selectedProducts.add(product.id)
+        this.saveSelectedToStorage()
+        
         return product
       } catch (error) {
         console.error('Błąd podczas pobierania produktu:', error)
@@ -81,7 +83,7 @@ export const useProductStore = defineStore('products', {
       } else {
         this.selectedProducts.add(productId)
       }
-      localStorage.setItem('selectedProducts', JSON.stringify(Array.from(this.selectedProducts)))
+      this.saveSelectedToStorage()
     },
 
     toggleAllProducts(selected) {
@@ -90,7 +92,7 @@ export const useProductStore = defineStore('products', {
       } else {
         this.selectedProducts.clear()
       }
-      localStorage.setItem('selectedProducts', JSON.stringify(Array.from(this.selectedProducts)))
+      this.saveSelectedToStorage()
     },
 
     toggleShowSelected() {
@@ -101,26 +103,91 @@ export const useProductStore = defineStore('products', {
       console.log('Przywracanie wybranych produktów...')
       const selectedIds = Array.from(this.selectedProducts)
       console.log('Znalezione ID w localStorage:', selectedIds)
-
-      for (const id of selectedIds) {
-        if (!this.allProductsMap.has(id)) {
-          try {
-            const response = await axios.get(`/labels/product/${id}`)
-            const product = response.data
-            console.log('Przywrócono produkt:', product)
-            
-            this.allProductsMap.set(product.id, product)
-            if (!this.products.find(p => p.id === product.id)) {
-              this.products.unshift(product)
-            }
-          } catch (error) {
-            console.error(`Nie udało się przywrócić produktu o ID ${id}:`, error)
-            // Opcjonalnie: usuń ID z selectedProducts jeśli produkt już nie istnieje
-            this.selectedProducts.delete(id)
-            localStorage.setItem('selectedProducts', JSON.stringify(Array.from(this.selectedProducts)))
-          }
-        }
+      
+      if (selectedIds.length === 0) {
+        console.log('Brak zapisanych ID w localStorage')
+        return
       }
+
+      try {
+        // Poprawiona ścieżka - usuwamy /api/ z początku
+        console.log('Wysyłam zapytanie o produkty z ID:', selectedIds)
+        const response = await axios.get('/labels/products/selected', {
+          params: { ids: selectedIds.join(',') }
+        })
+        
+        const products = response.data
+        console.log('Pobrane produkty:', products)
+
+        // Aktualizujemy store i allProductsMap
+        products.forEach(product => {
+          this.allProductsMap.set(product.id, product)
+          if (!this.products.find(p => p.id === product.id)) {
+            this.products.push(product) // lub unshift jeśli chcemy na początku
+          }
+        })
+
+        // Dodajmy sprawdzenie czy produkty zostały prawidłowo dodane 
+        console.log('Stan po przywróceniu:', {
+          allProductsMap: Array.from(this.allProductsMap.entries()),
+          products: this.products,
+          selectedProducts: Array.from(this.selectedProducts)
+        })
+      } catch (error) {
+        console.error('Błąd podczas przywracania produktów:', error, {
+          url: error.config?.url,
+          params: error.config?.params,
+          response: error.response?.data
+        })
+      }
+    },
+
+    saveSelectedToStorage() {
+      const selectedArray = Array.from(this.selectedProducts)
+      console.log('Zapisuję do localStorage:', selectedArray)
+      localStorage.setItem('selectedProducts', JSON.stringify(selectedArray))
+    },
+
+    async generatePDF() {
+      try {
+        console.log('Generowanie PDF dla wybranych produktów...')
+        const selectedIds = Array.from(this.selectedProducts)
+        
+        if (selectedIds.length === 0) {
+          throw new Error('Nie wybrano żadnych produktów')
+        }
+
+        const response = await axios.post('/labels/generate-pdf', {
+          selected_products: selectedIds.join(',')
+        }, {
+          responseType: 'blob' // Ważne dla pobierania plików
+        })
+
+        // Utworzenie URL dla pobranego pliku
+        const blob = new Blob([response.data], { type: 'application/pdf' })
+        const url = window.URL.createObjectURL(blob)
+        
+        // Utworzenie tymczasowego linku do pobrania
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', 'etykiety_cenowe.pdf')
+        document.body.appendChild(link)
+        link.click()
+        
+        // Czyszczenie
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(link)
+        
+        return true
+      } catch (error) {
+        console.error('Błąd podczas generowania PDF:', error)
+        throw error
+      }
+    },
+
+    clearSelected() {
+      this.selectedProducts.clear()
+      this.saveSelectedToStorage()
     }
   }
 })

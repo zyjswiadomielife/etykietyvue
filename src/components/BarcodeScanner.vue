@@ -37,12 +37,18 @@ const statusColor = computed(() => {
   return 'text-gray-500'
 })
 
+// Dodaj referencję do dźwięku
+const beepSound = new Audio('/sounds/beep.mp3')
+
 const onScanSuccess = async (decodedText, decodedResult) => {
   console.log(`Zeskanowano kod:`, decodedText, decodedResult)
   lastScanned.value = decodedText
   scanStatus.value = `Sukces: Zeskanowano kod ${decodedText}`
   
   try {
+    // Odtwórz dźwięk
+    await beepSound.play()
+    
     await store.fetchProductByEan(decodedText)
     scanStatus.value = `Sukces: Dodano produkt o kodzie ${decodedText}`
   } catch (error) {
@@ -52,9 +58,21 @@ const onScanSuccess = async (decodedText, decodedResult) => {
 }
 
 const onScanFailure = (error) => {
-  // Wyświetlamy błędy tylko jeśli nie są to standardowe błędy skanowania
-  if (!error.includes('No QR code found') && 
-      !error.includes('NotFoundException')) {
+  // Rozszerzamy listę ignorowanych błędów
+  const ignoredErrors = [
+    'No QR code found',
+    'NotFoundException',
+    'No barcode or QR code detected',
+    'QR code parse error',
+    'No MultiFormat Readers were able to detect the code.'
+  ]
+
+  // Sprawdzamy, czy błąd zawiera którykolwiek z ignorowanych tekstów
+  const shouldIgnore = ignoredErrors.some(ignoredError => 
+    error.toLowerCase().includes(ignoredError.toLowerCase())
+  )
+
+  if (!shouldIgnore) {
     scanStatus.value = `Błąd skanowania: ${error}`
     console.warn('Błąd skanowania:', error)
   }
