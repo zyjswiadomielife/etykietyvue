@@ -37,6 +37,8 @@ const statusColor = computed(() => {
   return 'text-gray-500'
 })
 
+const emit = defineEmits(['scanned'])
+
 // Dodaj referencję do dźwięku
 const beepSound = new Audio('/sounds/beep.mp3')
 
@@ -46,14 +48,12 @@ const onScanSuccess = async (decodedText, decodedResult) => {
   scanStatus.value = `Sukces: Zeskanowano kod ${decodedText}`
   
   try {
-    // Odtwórz dźwięk
     await beepSound.play()
-    
-    await store.fetchProductByEan(decodedText)
-    scanStatus.value = `Sukces: Dodano produkt o kodzie ${decodedText}`
+    emit('scanned', decodedText)
+    scanStatus.value = `Sukces: Zeskanowano kod ${decodedText}`
   } catch (error) {
-    scanStatus.value = `Błąd: Nie udało się dodać produktu (${error.message})`
-    console.error('Błąd podczas dodawania produktu:', error)
+    scanStatus.value = `Błąd: ${error.message}`
+    console.error('Błąd podczas skanowania:', error)
   }
 }
 
