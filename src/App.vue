@@ -12,6 +12,12 @@ onMounted(async () => {
 </script>
 
 <template>
+  <header>
+    <nav>
+      <RouterLink to="/">Generator cenówek</RouterLink>
+      <RouterLink to="/inventory">Inwentaryzacja</RouterLink>
+    </nav>
+  </header>
   <RouterView />
 </template>
 

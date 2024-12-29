@@ -34,6 +34,7 @@
             v-model.number="scanForm.quantity"
             type="number"
             step="0.01"
+            min="0"
             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             @keyup.enter="saveProduct"
           >
@@ -86,15 +87,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import BarcodeScanner from '@/components/BarcodeScanner.vue'
 import { useInventoryStore } from '@/stores/inventory'
 
 const store = useInventoryStore()
 
-// Używamy storeToRefs tylko dla tych wartości, które chcemy aby były reaktywne
-const { currentProduct, inventoryData } = storeToRefs(store)
+// Używamy storeToRefs dla reaktywnych właściwości
+const { currentProduct, inventoryData, scanForm: storeScanForm } = storeToRefs(store)
 
 // Tworzymy lokalną kopię formularza
 const scanForm = ref({
@@ -144,19 +145,47 @@ const findProduct = async () => {
 
 // Zapisywanie zeskanowanego produktu
 const saveProduct = async () => {
-  console.log('Próba zapisania produktu:', {
-    currentProduct: currentProduct.value,
-    quantity: scanForm.value.quantity
+  const quantity = Number(scanForm.value.quantity)
+  
+  console.log('Próba zapisania produktu z formularza:', {
+    ean: scanForm.value.ean,
+    quantity: quantity,
+    rawQuantity: scanForm.value.quantity,
+    isValidNumber: !isNaN(quantity) && quantity > 0,
+    currentProduct: currentProduct.value ? {
+      id: currentProduct.value.id,
+      name: currentProduct.value.name,
+      ean: currentProduct.value.ean
+    } : null
   })
   
+  if (!quantity || isNaN(quantity) || quantity <= 0) {
+    alert('Proszę wprowadzić prawidłową ilość')
+    return
+  }
+
   try {
-    // Przekazujemy wartości formularza do store'a
-    store.scanForm.value = { ...scanForm.value }
-    await store.saveProduct()
+    // Upewniamy się, że EAN jest zsynchronizowany
+    storeScanForm.value = {
+      ean: scanForm.value.ean,
+      quantity: quantity
+    }
     
-    // Czyścimy lokalny formularz
-    scanForm.value.ean = ''
-    scanForm.value.quantity = null
+    const result = await store.saveProduct()
+    
+    if (!result.success) {
+      throw new Error(result.message)
+    }
+    
+    // Czyścimy oba formularze
+    scanForm.value = {
+      ean: '',
+      quantity: null
+    }
+    storeScanForm.value = {
+      ean: '',
+      quantity: null
+    }
     await fetchSummary()
     console.log('Produkt zapisany pomyślnie')
   } catch (error) {
@@ -171,7 +200,17 @@ const toggleScanner = () => {
 
 const handleScanned = async (ean) => {
   try {
+    console.log('Zeskanowano kod:', ean)
+    // Najpierw ustawiamy EAN w lokalnym formularzu
+    scanForm.value.ean = ean
+    
     await store.fetchProductByEan(ean)
+    console.log('Pobrany produkt:', currentProduct.value)
+    
+    // Synchronizujemy wartości między lokalnym formularzem a store'm
+    storeScanForm.value.ean = ean
+    scanForm.value.quantity = null // Resetujemy ilość
+    
     // Po zeskanowaniu automatycznie fokusujemy pole z ilością
     const quantityInput = document.querySelector('input[type="number"]')
     if (quantityInput) {
@@ -193,6 +232,18 @@ onMounted(() => {
 onUnmounted(() => {
   if (refreshInterval) {
     clearInterval(refreshInterval)
+  }
+})
+
+// Dodajemy watch na currentProduct, aby synchronizować EAN
+watch(currentProduct, (newProduct) => {
+  if (newProduct) {
+    console.log('Aktualizacja formularza po zmianie produktu:', {
+      name: newProduct.name,
+      ean: newProduct.ean
+    })
+    scanForm.value.ean = newProduct.ean
+    storeScanForm.value.ean = newProduct.ean
   }
 })
 </script>
