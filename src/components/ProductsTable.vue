@@ -76,7 +76,7 @@
       </table>
     </div>
     <div v-else-if="searchBarRef?.isScannerActive && !store.showingSelected" class="w-full">
-      <BarcodeScanner />
+      <BarcodeScanner @scanned="handleScannedProduct" />
     </div>
   </div>
 </template>
@@ -129,6 +129,14 @@ const handleBarcodeScan = async (event) => {
       await store.fetchProductByEan(barcodeBuffer.value)
     }
     barcodeBuffer.value = '' // Wyczyść bufor po zeskanowaniu
+  }
+}
+
+const handleScannedProduct = async (barcode) => {
+  try {
+    await store.fetchProductByEan(barcode)
+  } catch (error) {
+    console.error('Błąd podczas dodawania zeskanowanego produktu:', error)
   }
 }
 
